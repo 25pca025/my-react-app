@@ -1,0 +1,62 @@
+name: Build and Deploy to GitHub Pages
+
+on:
+  # Runs when code is pushed to the main branch (build + deploy)
+  push:
+    branches: [main]
+  # Runs a build check for pull requests targeting main (no deploy)
+  pull_request:
+    branches: [main]
+  # Lets you start the workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Minimum permissions for all jobs. Individual jobs can ask for more.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      # Only package the site for deployment when this is NOT a pull request
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./dist
+
+  deploy:
+    name: Deploy
+    # Deploy only after a successful build, and never for pull requests
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write # allows publishing to GitHub Pages
+      id-token: write # lets GitHub verify the deployment source
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
